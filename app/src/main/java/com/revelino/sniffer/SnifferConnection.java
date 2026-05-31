@@ -35,18 +35,18 @@ public class SnifferConnection implements SerialInputOutputManager.Listener {
     public boolean connect(UsbDevice device) {
         UsbManager usbManager = (UsbManager) context.getSystemService(Context.USB_SERVICE);
 
-        // First try the custom prober with known USB-serial chips + CDC-ACM
-        UsbSerialDriver driver = buildCustomProber().probeDevice(device);
+        // Try the default prober first
+        UsbSerialDriver driver = UsbSerialProber.getDefaultProber().probeDevice(device);
         if (driver == null) {
-            // Fallback to default prober
-            driver = UsbSerialProber.getDefaultProber().probeDevice(device);
-        }
-        if (driver == null) {
-            listener.onError(new Exception(
-                "No driver for " + device.getProductName() +
-                " VID:0x" + Integer.toHexString(device.getVendorId()) +
-                " PID:0x" + Integer.toHexString(device.getProductId())));
-            return false;
+            // Fallback: try CDC-ACM directly
+            driver = new CdcAcmSerialDriver(device);
+            if (driver.getPorts().isEmpty()) {
+                listener.onError(new Exception(
+                    "No driver for " + device.getProductName() +
+                    " VID:0x" + Integer.toHexString(device.getVendorId()) +
+                    " PID:0x" + Integer.toHexString(device.getProductId())));
+                return false;
+            }
         }
 
         UsbDeviceConnection connection = usbManager.openDevice(device);
@@ -73,11 +73,6 @@ public class SnifferConnection implements SerialInputOutputManager.Listener {
             try { port.close(); } catch (IOException ignored) {}
             return false;
         }
-    }
-
-    private static UsbSerialProber buildCustomProber() {
-        return UsbSerialProber.getDefaultProber()
-            .addDriver(CdcAcmSerialDriver.class);
     }
 
     public void disconnect() {
