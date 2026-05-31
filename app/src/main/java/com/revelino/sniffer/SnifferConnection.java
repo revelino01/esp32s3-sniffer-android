@@ -2,6 +2,8 @@ package com.revelino.sniffer;
 
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbDeviceConnection;
+import android.hardware.usb.UsbEndpoint;
+import android.hardware.usb.UsbInterface;
 import android.hardware.usb.UsbManager;
 import android.content.Context;
 import android.util.Log;
@@ -14,6 +16,7 @@ import com.hoho.android.usbserial.driver.UsbSerialProber;
 import com.hoho.android.usbserial.util.SerialInputOutputManager;
 
 import java.io.IOException;
+import java.util.List;
 
 public class SnifferConnection implements SerialInputOutputManager.Listener {
     private static final String TAG = "Sniffer";
@@ -23,6 +26,7 @@ public class SnifferConnection implements SerialInputOutputManager.Listener {
         void onDisconnected();
         void onData(byte[] data, int len);
         void onError(Exception e);
+        void onLog(String msg);
     }
 
     private final Context context;
@@ -53,15 +57,37 @@ public class SnifferConnection implements SerialInputOutputManager.Listener {
             return false;
         }
 
+        log("Device: " + device.getProductName()
+            + " VID=0x" + Integer.toHexString(device.getVendorId())
+            + " PID=0x" + Integer.toHexString(device.getProductId())
+            + " ifaces=" + device.getInterfaceCount());
+
+        // Log all interfaces for diagnostics
+        for (int i = 0; i < device.getInterfaceCount(); i++) {
+            UsbInterface iface = device.getInterface(i);
+            log("  iface[" + i + "]: class=" + iface.getInterfaceClass()
+                + " subclass=" + iface.getInterfaceSubclass()
+                + " protocol=" + iface.getInterfaceProtocol()
+                + " endpoints=" + iface.getEndpointCount());
+        }
+
         // Try custom prober first (ESP32-S3 VID/PID), then default, then direct CDC-ACM
         UsbSerialDriver driver = createProber().probeDevice(device);
+        log("Custom prober: " + (driver != null ? driver.getClass().getSimpleName() : "null"));
+
         if (driver == null) {
             driver = UsbSerialProber.getDefaultProber().probeDevice(device);
+            log("Default prober: " + (driver != null ? driver.getClass().getSimpleName() : "null"));
         }
         if (driver == null) {
-            driver = new CdcAcmSerialDriver(device);
+            try {
+                driver = new CdcAcmSerialDriver(device);
+                log("Direct CDC-ACM fallback: ports=" + driver.getPorts().size());
+            } catch (Exception e) {
+                log("CDC-ACM fallback failed: " + e.getMessage());
+            }
         }
-        if (driver.getPorts().isEmpty()) {
+        if (driver == null || driver.getPorts().isEmpty()) {
             listener.onError(new Exception("No serial ports on device"));
             return false;
         }
@@ -72,13 +98,21 @@ public class SnifferConnection implements SerialInputOutputManager.Listener {
             return false;
         }
 
+        log("USB device opened, serial=" + connection.getSerial());
+
         port = driver.getPorts().get(0);
         try {
             port.open(connection);
+            log("Port opened: " + port.getClass().getSimpleName());
+
+            // CDC-ACM doesn't use baud rate for USB transfers, but set it anyway
             port.setParameters(115200, UsbSerialPort.DATABITS_8,
                 UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE);
+
+            // Signal DTR so ESP32 knows host is ready (usb_otg_stream_connected checks DTR)
             port.setDTR(true);
             port.setRTS(true);
+            log("DTR/RTS set, starting IO manager");
 
             ioManager = new SerialInputOutputManager(port, this);
             ioManager.start();
@@ -94,6 +128,7 @@ public class SnifferConnection implements SerialInputOutputManager.Listener {
     }
 
     public void disconnect() {
+        log("Disconnecting");
         if (ioManager != null) {
             ioManager.stop();
             ioManager = null;
@@ -112,6 +147,12 @@ public class SnifferConnection implements SerialInputOutputManager.Listener {
 
     @Override
     public void onRunError(Exception e) {
+        Log.e(TAG, "IO manager error", e);
         listener.onError(e);
+    }
+
+    private void log(String msg) {
+        Log.d(TAG, msg);
+        listener.onLog(msg);
     }
 }

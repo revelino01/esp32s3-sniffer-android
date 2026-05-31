@@ -118,6 +118,9 @@ public class MainActivity extends AppCompatActivity {
             @Override public void onError(Exception e) {
                 uiHandler.post(() -> log("Error: " + e.getMessage()));
             }
+            @Override public void onLog(String msg) {
+                uiHandler.post(() -> log(msg));
+            }
         });
 
         tvLog.post(this::findAndConnect);
@@ -149,9 +152,6 @@ public class MainActivity extends AppCompatActivity {
 
     private void requestPermission(UsbDevice device) {
         UsbManager usbManager = (UsbManager) getSystemService(Context.USB_SERVICE);
-        // Must use FLAG_MUTABLE on Android 12+ so the system can write
-        // EXTRA_PERMISSION_GRANTED and EXTRA_DEVICE into the broadcast Intent.
-        // Must use explicit intent (setPackage + setClass) for Android 14+.
         Intent intent = new Intent(ACTION_USB_PERMISSION);
         intent.setPackage(getPackageName());
         intent.setClass(this, MainActivity.class);
