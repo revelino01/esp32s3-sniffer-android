@@ -28,8 +28,12 @@ jobs:
       - name: Accept licenses
         run: yes | sdkmanager --licenses
 
-      - name: Build APK
-        run: ./gradlew assembleRelease
+      - name: Generate signing keystore
+        run: |
+          keytool -genkey -v -keystore release.keystore -alias sniffer -keyalg RSA -keysize 2048 -validity 10000 -storepass snifferpass -keypass snifferpass -dname "CN=Sniffer"
+
+      - name: Build signed APK
+        run: ./gradlew assembleRelease -Pandroid.injected.signing.store.file=$PWD/release.keystore -Pandroid.injected.signing.store.password=snifferpass -Pandroid.injected.signing.key.alias=sniffer -Pandroid.injected.signing.key.password=snifferpass
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
