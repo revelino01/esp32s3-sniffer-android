@@ -35,17 +35,17 @@ public class SnifferConnection implements SerialInputOutputManager.Listener {
     public boolean connect(UsbDevice device) {
         UsbManager usbManager = (UsbManager) context.getSystemService(Context.USB_SERVICE);
 
-        // Custom prober for ESP32-S3 CDC-ACM
-        UsbSerialProber prober = buildProber();
-        UsbSerialDriver driver = prober.probeDevice(device);
+        // Try default prober first (includes CDC-ACM support)
+        UsbSerialDriver driver = UsbSerialProber.getDefaultProber().probeDevice(device);
         if (driver == null) {
-            driver = UsbSerialProber.getDefaultProber().probeDevice(device);
-        }
-        if (driver == null) {
-            listener.onError(new Exception("No driver for device VID:0x" +
-                Integer.toHexString(device.getVendorId()) +
-                " PID:0x" + Integer.toHexString(device.getProductId())));
-            return false;
+            // Fallback: try CDC-ACM directly
+            driver = new CdcAcmSerialDriver(device);
+            if (driver.getPorts().isEmpty()) {
+                listener.onError(new Exception("No driver for device VID:0x" +
+                    Integer.toHexString(device.getVendorId()) +
+                    " PID:0x" + Integer.toHexString(device.getProductId())));
+                return false;
+            }
         }
 
         UsbDeviceConnection connection = usbManager.openDevice(device);
@@ -71,13 +71,6 @@ public class SnifferConnection implements SerialInputOutputManager.Listener {
             listener.onError(e);
             return false;
         }
-    }
-
-    private static UsbSerialProber buildProber() {
-        UsbSerialProber.Prober prober = new UsbSerialProber.Prober();
-        // Register CDC-ACM fallback for any VID/PID
-        prober.addDriver(CdcAcmSerialDriver.class);
-        return prober;
     }
 
     public void disconnect() {
