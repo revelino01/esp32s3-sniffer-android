@@ -10,6 +10,7 @@ import android.hardware.usb.UsbManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 import android.widget.Button;
 import android.widget.TextView;
 
@@ -21,6 +22,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class MainActivity extends AppCompatActivity {
+    private static final String TAG = "Sniffer";
     private static final String ACTION_USB_PERMISSION = "com.revelino.sniffer.USB_PERMISSION";
 
     private TextView tvStatus, tvPacketCount, tvChannel, tvLog;
@@ -37,16 +39,15 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
+            Log.d(TAG, "onReceive: action=" + action);
             if (ACTION_USB_PERMISSION.equals(action)) {
-                synchronized (this) {
-                    UsbDevice device = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
-                    if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
-                        if (device != null) {
-                            connectDevice(device);
-                        }
-                    } else {
-                        log("USB permission denied");
-                    }
+                UsbDevice device = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
+                boolean granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false);
+                Log.d(TAG, "USB permission result: granted=" + granted + " device=" + device);
+                if (granted && device != null) {
+                    connectDevice(device);
+                } else {
+                    log("USB permission denied");
                 }
             } else if (UsbManager.ACTION_USB_DEVICE_ATTACHED.equals(action)) {
                 UsbDevice device = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
@@ -125,8 +126,17 @@ public class MainActivity extends AppCompatActivity {
     private void findAndConnect() {
         UsbManager usbManager = (UsbManager) getSystemService(Context.USB_SERVICE);
         for (UsbDevice device : usbManager.getDeviceList().values()) {
+            Log.d(TAG, "Found USB device: " + device.getProductName()
+                + " VID=0x" + Integer.toHexString(device.getVendorId())
+                + " PID=0x" + Integer.toHexString(device.getProductId()));
             if (isEsp32s3(device)) {
-                requestPermission(device);
+                if (usbManager.hasPermission(device)) {
+                    log("Already have permission, connecting...");
+                    connectDevice(device);
+                } else {
+                    log("Requesting USB permission...");
+                    requestPermission(device);
+                }
                 return;
             }
         }
@@ -139,12 +149,18 @@ public class MainActivity extends AppCompatActivity {
 
     private void requestPermission(UsbDevice device) {
         UsbManager usbManager = (UsbManager) getSystemService(Context.USB_SERVICE);
-        PendingIntent pi = PendingIntent.getBroadcast(this, 0,
-            new Intent(ACTION_USB_PERMISSION), PendingIntent.FLAG_IMMUTABLE);
+        // Must use FLAG_MUTABLE on Android 12+ so the system can write
+        // EXTRA_PERMISSION_GRANTED and EXTRA_DEVICE into the broadcast Intent.
+        // Must use explicit intent (setPackage + setClass) for Android 14+.
+        Intent intent = new Intent(ACTION_USB_PERMISSION);
+        intent.setPackage(getPackageName());
+        intent.setClass(this, MainActivity.class);
+        PendingIntent pi = PendingIntent.getBroadcast(this, 0, intent, PendingIntent.FLAG_MUTABLE);
         usbManager.requestPermission(device, pi);
     }
 
     private void connectDevice(UsbDevice device) {
+        Log.d(TAG, "connectDevice: " + device.getProductName());
         if (conn.connect(device)) {
             log("Connected to " + device.getProductName());
         }
@@ -155,6 +171,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void log(String msg) {
+        Log.d(TAG, "log: " + msg);
         uiHandler.post(() -> {
             tvLog.append(msg + "\n");
             if (tvLog.getLayout() != null && tvLog.getLineCount() > 0) {
