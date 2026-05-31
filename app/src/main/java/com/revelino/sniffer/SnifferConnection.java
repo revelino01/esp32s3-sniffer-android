@@ -37,7 +37,8 @@ public class SnifferConnection implements SerialInputOutputManager.Listener {
     // Custom prober that explicitly maps ESP32-S3 VID/PID to CDC-ACM driver
     private static UsbSerialProber createProber() {
         ProbeTable table = new ProbeTable();
-        table.addProduct(0x303A, 0x1001, CdcAcmSerialDriver.class); // ESP32-S3
+        table.addProduct(0x303A, 0x1001, CdcAcmSerialDriver.class); // ESP32-S3 USB-JTAG/Serial
+        table.addProduct(0x303A, 0x4002, CdcAcmSerialDriver.class); // ESP32-S3 USB Single Serial (CDC-ACM)
         table.addProduct(0x10C4, 0xEA60, CdcAcmSerialDriver.class); // CP210x
         table.addProduct(0x1A86, 0x7523, CdcAcmSerialDriver.class); // CH340
         return new UsbSerialProber(table);

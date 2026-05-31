@@ -147,7 +147,17 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private boolean isEsp32s3(UsbDevice d) {
-        return d.getVendorId() == 0x303A || d.getVendorId() == 0x10C4;
+        // Accept any Espressif device (0x303A) or any CDC-ACM class 2 device
+        if (d.getVendorId() == 0x303A) return true;
+        if (d.getVendorId() == 0x10C4) return true; // Silabs CP210x
+        // Check if device has a CDC-ACM interface (class=2, subclass=2)
+        for (int i = 0; i < d.getInterfaceCount(); i++) {
+            android.hardware.usb.UsbInterface iface = d.getInterface(i);
+            if (iface.getInterfaceClass() == 2 && iface.getInterfaceSubclass() == 2) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void requestPermission(UsbDevice device) {

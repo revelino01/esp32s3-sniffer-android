@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- ESP32-S3 USB CDC-ACM (VID=0x303A, PID=0x1001) -->
+    <!-- ESP32-S3: USB-JTAG/Serial (0x303A:0x1001) and USB Single Serial / CDC-ACM (0x303A:0x4002) -->
     <usb-device vendor-id="12346" product-id="4097" />
-    <!-- Generic CDC-ACM devices (class=2 subclass=2) -->
+    <usb-device vendor-id="12346" product-id="16386" />
+    <!-- Generic Espressif VID (catches any future PIDs) -->
+    <usb-device vendor-id="12346" />
+    <!-- Generic CDC-ACM (class 2, subclass 2) -->
     <usb-device class="2" subclass="2" protocol="0" />
 </resources>
