@@ -35,17 +35,18 @@ public class SnifferConnection implements SerialInputOutputManager.Listener {
     public boolean connect(UsbDevice device) {
         UsbManager usbManager = (UsbManager) context.getSystemService(Context.USB_SERVICE);
 
-        // Try default prober first (includes CDC-ACM support)
-        UsbSerialDriver driver = UsbSerialProber.getDefaultProber().probeDevice(device);
+        // First try the custom prober with known USB-serial chips + CDC-ACM
+        UsbSerialDriver driver = buildCustomProber().probeDevice(device);
         if (driver == null) {
-            // Fallback: try CDC-ACM directly
-            driver = new CdcAcmSerialDriver(device);
-            if (driver.getPorts().isEmpty()) {
-                listener.onError(new Exception("No driver for device VID:0x" +
-                    Integer.toHexString(device.getVendorId()) +
-                    " PID:0x" + Integer.toHexString(device.getProductId())));
-                return false;
-            }
+            // Fallback to default prober
+            driver = UsbSerialProber.getDefaultProber().probeDevice(device);
+        }
+        if (driver == null) {
+            listener.onError(new Exception(
+                "No driver for " + device.getProductName() +
+                " VID:0x" + Integer.toHexString(device.getVendorId()) +
+                " PID:0x" + Integer.toHexString(device.getProductId())));
+            return false;
         }
 
         UsbDeviceConnection connection = usbManager.openDevice(device);
@@ -68,9 +69,15 @@ public class SnifferConnection implements SerialInputOutputManager.Listener {
             listener.onConnected();
             return true;
         } catch (IOException e) {
-            listener.onError(e);
+            listener.onError(new Exception("Failed to open port: " + e.getMessage()));
+            try { port.close(); } catch (IOException ignored) {}
             return false;
         }
+    }
+
+    private static UsbSerialProber buildCustomProber() {
+        return UsbSerialProber.getDefaultProber()
+            .addDriver(CdcAcmSerialDriver.class);
     }
 
     public void disconnect() {
@@ -84,7 +91,6 @@ public class SnifferConnection implements SerialInputOutputManager.Listener {
             } catch (IOException ignored) {}
             port = null;
         }
-        listener.onDisconnected();
     }
 
     @Override
