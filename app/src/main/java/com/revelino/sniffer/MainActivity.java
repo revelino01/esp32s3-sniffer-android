@@ -85,7 +85,7 @@ public class MainActivity extends AppCompatActivity {
         filter.addAction(ACTION_USB_PERMISSION);
         filter.addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED);
         filter.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
-        registerReceiver(usbReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        registerReceiver(usbReceiver, filter, Context.RECEIVER_EXPORTED);
 
         conn = new SnifferConnection(this, new SnifferConnection.Listener() {
             @Override public void onConnected() {
