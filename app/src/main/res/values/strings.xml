@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ESP32-S3 Sniffer</string>
+    <string name="connect">Connect</string>
+    <string name="disconnect">Disconnect</string>
+    <string name="status">Status:</string>
+    <string name="packets">Packets:</string>
+    <string name="channel">Channel:</string>
+    <string name="rssi">RSSI:</string>
+</resources>
