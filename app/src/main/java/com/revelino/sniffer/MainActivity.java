@@ -14,8 +14,11 @@ import android.widget.Button;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class MainActivity extends AppCompatActivity {
     private static final String ACTION_USB_PERMISSION = "com.revelino.sniffer.USB_PERMISSION";
@@ -26,8 +29,9 @@ public class MainActivity extends AppCompatActivity {
     private PacketAdapter adapter;
     private SnifferConnection conn;
     private final Handler uiHandler = new Handler(Looper.getMainLooper());
-    private int totalPackets = 0;
-    private int currentChannel = 0;
+    private final AtomicInteger totalPackets = new AtomicInteger(0);
+    private volatile int currentChannel = 0;
+    private final SniffParser parser = new SniffParser();
 
     private final BroadcastReceiver usbReceiver = new BroadcastReceiver() {
         @Override
@@ -85,38 +89,37 @@ public class MainActivity extends AppCompatActivity {
 
         conn = new SnifferConnection(this, new SnifferConnection.Listener() {
             @Override public void onConnected() {
-                runOnUiThread(() -> {
+                uiHandler.post(() -> {
                     tvStatus.setText("Connected");
-                    tvStatus.setTextColor(getColor(R.color.online));
+                    tvStatus.setTextColor(ContextCompat.getColor(MainActivity.this, R.color.online));
                     btnConnect.setText(R.string.disconnect);
                 });
             }
             @Override public void onDisconnected() {
-                runOnUiThread(() -> {
+                uiHandler.post(() -> {
                     tvStatus.setText("Disconnected");
-                    tvStatus.setTextColor(getColor(R.color.offline));
+                    tvStatus.setTextColor(ContextCompat.getColor(MainActivity.this, R.color.offline));
                     btnConnect.setText(R.string.connect);
                 });
             }
             @Override public void onData(byte[] data, int len) {
-                SniffPacket[] pkts = new SniffParser().feed(data, len);
+                SniffPacket[] pkts = parser.feed(data, len);
                 for (SniffPacket p : pkts) {
-                    totalPackets++;
+                    totalPackets.incrementAndGet();
                     currentChannel = p.channel;
-                    runOnUiThread(() -> {
+                    uiHandler.post(() -> {
                         adapter.addPacket(p);
-                        tvPacketCount.setText(String.valueOf(totalPackets));
+                        tvPacketCount.setText(String.valueOf(totalPackets.get()));
                         tvChannel.setText(String.valueOf(currentChannel));
                     });
                 }
             }
             @Override public void onError(Exception e) {
-                runOnUiThread(() -> log("Error: " + e.getMessage()));
+                uiHandler.post(() -> log("Error: " + e.getMessage()));
             }
         });
 
-        // Check for already-attached device
-        findAndConnect();
+        tvLog.post(this::findAndConnect);
     }
 
     private void findAndConnect() {
@@ -131,7 +134,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private boolean isEsp32s3(UsbDevice d) {
-        // Espressif vendor ID = 0x303A
         return d.getVendorId() == 0x303A || d.getVendorId() == 0x10C4;
     }
 
@@ -155,10 +157,10 @@ public class MainActivity extends AppCompatActivity {
     private void log(String msg) {
         uiHandler.post(() -> {
             tvLog.append(msg + "\n");
-            tvLog.post(() -> {
+            if (tvLog.getLayout() != null && tvLog.getLineCount() > 0) {
                 int scroll = tvLog.getLayout().getLineTop(tvLog.getLineCount()) - tvLog.getHeight();
                 if (scroll > 0) tvLog.scrollTo(0, scroll);
-            });
+            }
         });
     }
 

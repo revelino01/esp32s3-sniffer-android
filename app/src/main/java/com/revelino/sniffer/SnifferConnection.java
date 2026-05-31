@@ -5,6 +5,7 @@ import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbManager;
 import android.content.Context;
 
+import com.hoho.android.usbserial.driver.CdcAcmSerialDriver;
 import com.hoho.android.usbserial.driver.UsbSerialDriver;
 import com.hoho.android.usbserial.driver.UsbSerialPort;
 import com.hoho.android.usbserial.driver.UsbSerialProber;
@@ -23,7 +24,6 @@ public class SnifferConnection implements SerialInputOutputManager.Listener {
 
     private final Context context;
     private final Listener listener;
-    private final SniffParser parser = new SniffParser();
     private UsbSerialPort port;
     private SerialInputOutputManager ioManager;
 
@@ -34,9 +34,17 @@ public class SnifferConnection implements SerialInputOutputManager.Listener {
 
     public boolean connect(UsbDevice device) {
         UsbManager usbManager = (UsbManager) context.getSystemService(Context.USB_SERVICE);
-        UsbSerialDriver driver = UsbSerialProber.getDefaultProber().probeDevice(device);
+
+        // Custom prober for ESP32-S3 CDC-ACM
+        UsbSerialProber prober = buildProber();
+        UsbSerialDriver driver = prober.probeDevice(device);
         if (driver == null) {
-            listener.onError(new Exception("No driver for device"));
+            driver = UsbSerialProber.getDefaultProber().probeDevice(device);
+        }
+        if (driver == null) {
+            listener.onError(new Exception("No driver for device VID:0x" +
+                Integer.toHexString(device.getVendorId()) +
+                " PID:0x" + Integer.toHexString(device.getProductId())));
             return false;
         }
 
@@ -63,6 +71,13 @@ public class SnifferConnection implements SerialInputOutputManager.Listener {
             listener.onError(e);
             return false;
         }
+    }
+
+    private static UsbSerialProber buildProber() {
+        UsbSerialProber.Prober prober = new UsbSerialProber.Prober();
+        // Register CDC-ACM fallback for any VID/PID
+        prober.addDriver(CdcAcmSerialDriver.class);
+        return prober;
     }
 
     public void disconnect() {

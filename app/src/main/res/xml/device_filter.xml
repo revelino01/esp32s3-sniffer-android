@@ -2,7 +2,7 @@
 <resources>
     <!-- ESP32-S3 USB CDC-ACM -->
     <usb-device vendor-id="12346" product-id="4097" />
-    <!-- Generic CDC-ACM fallback -->
-    <usb-device vendor-id="9025" product-id="32768" />
+    <!-- Silabs CP210x fallback -->
+    <usb-device vendor-id="4292" product-id="60000" />
     <usb-device class="2" subclass="0" protocol="0" />
 </resources>
